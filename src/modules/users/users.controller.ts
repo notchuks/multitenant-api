@@ -1,11 +1,10 @@
 import { FastifyReply, FastifyRequest } from "fastify";
-import { CreateUserBody, LoginBody } from "./users.schemas";
+import { AssignRoleToUserBody, CreateUserBody, LoginBody } from "./users.schemas";
 import { SYSTEM_ROLES } from "../../config/permissions";
 import { getRoleByName } from "../roles/roles.services";
-import { applications } from "../../db/schema";
 import { assignRoleToUser, createUser, getUsersByApplication, getUsersByEmail } from "./users.services";
-import jwt from "jsonwebtoken";
 import { signJwt } from "../../utils/jwt.utils";
+import { logger } from "../../utils/logger";
 
 export async function createUserHandler(request: FastifyRequest<{ Body: CreateUserBody }>, reply: FastifyReply) {
   const { initialUser, ...data } = request.body;
@@ -65,6 +64,22 @@ export async function loginHandler(request: FastifyRequest<{ Body: LoginBody }>,
   }
 
   const accessToken = signJwt({ id: user.id, email, applicationId, scopes: user.permissions }, { expiresIn: "15m" });
-  console.log(accessToken);
+  // console.log(accessToken);
   return { accessToken };
+}
+
+export async function assignRoleToUserHandler(request: FastifyRequest<{ Body: AssignRoleToUserBody }>, reply: FastifyReply) {
+  // im sure applicationId will always be present here due to request hooks before the request
+  const applicationId = request.user.decoded?.applicationId as string;
+  const { userId, roleId } = request.body;
+
+  try {
+    const result = await assignRoleToUser({ userId, roleId, applicationId });
+    return result;
+  } catch (e) {
+    logger.error(e, "error assigning role to user.");
+    return reply.code(400).send({
+      message: "could not assign role to user",
+    })
+  }
 }
